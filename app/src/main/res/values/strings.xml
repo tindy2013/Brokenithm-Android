@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Brokenithm</string>
+
+    <string name="title">Brokenithm-Evolved</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="coin">coin</string>
+    <string name="card">card</string>
+    <string name="simple_air">Simple Air</string>
+    <string name="expand"> Control ↓ </string>
+    <string name="collapse"> Control ↑ </string>
+    <string name="test">Test</string>
+    <string name="service">Service</string>
+    <string name="show_debug_info">Show Debug Info</string>
+    <string name="debug_info">touched: air:%d %s\n%s</string>
+    <string name="current_latency">Current Latency: %f ms</string>
+    <string name="press_again_to_exit">Press again to exit</string>
+    <string name="show_delay">Show Delay</string>
+    <string name="address">Address</string>
+    <string name="enable_vibration">Enable Vibration</string>
+
+    <string name="tcp">TCP</string>
+    <string name="udp">UDP</string>
+</resources>
