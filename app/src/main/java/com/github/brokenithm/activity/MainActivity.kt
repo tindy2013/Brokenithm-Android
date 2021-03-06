@@ -555,12 +555,16 @@ class MainActivity : AppCompatActivity() {
             byteArrayOf(23, 'C'.toByte(), 'O'.toByte(), 'N'.toByte()).copyInto(buffer)
             selfAddress.toByteArray().copyInto(buffer, 4)
             serverPort.toString().toByteArray().copyInto(buffer, 4 + 15)
-            val socket = DatagramSocket()
-            val packet = DatagramPacket(buffer, buffer.size)
-            socket.apply {
-                connect(address)
-                send(packet)
-                close()
+            try {
+                val socket = DatagramSocket()
+                val packet = DatagramPacket(buffer, buffer.size)
+                socket.apply {
+                    connect(address)
+                    send(packet)
+                    close()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -572,17 +576,21 @@ class MainActivity : AppCompatActivity() {
             if (mTCPMode) {
                 try {
                     mTCPSocket.getOutputStream().write(buffer)
+                    mTCPSocket.close()
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-                mTCPSocket.close()
             } else {
-                val socket = DatagramSocket()
-                val packet = DatagramPacket(buffer, buffer.size)
-                socket.apply {
-                    connect(address)
-                    send(packet)
-                    close()
+                try {
+                    val socket = DatagramSocket()
+                    val packet = DatagramPacket(buffer, buffer.size)
+                    socket.apply {
+                        connect(address)
+                        send(packet)
+                        close()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -599,12 +607,16 @@ class MainActivity : AppCompatActivity() {
                     e.printStackTrace()
                 }
             } else {
-                val socket = DatagramSocket()
-                val packet = DatagramPacket(buffer, buffer.size)
-                socket.apply {
-                    connect(address)
-                    send(packet)
-                    close()
+                try {
+                    val socket = DatagramSocket()
+                    val packet = DatagramPacket(buffer, buffer.size)
+                    socket.apply {
+                        connect(address)
+                        send(packet)
+                        close()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -619,12 +631,16 @@ class MainActivity : AppCompatActivity() {
         val buffer = ByteArray(12)
         byteArrayOf(11, 'P'.toByte(), 'I'.toByte(), 'N'.toByte()).copyInto(buffer)
         ByteBuffer.wrap(buffer, 4, 8).putLong(SystemClock.elapsedRealtimeNanos())
-        val socket = DatagramSocket()
-        val packet = DatagramPacket(buffer, buffer.size)
-        socket.apply {
-            connect(address)
-            send(packet)
-            close()
+        try {
+            val socket = DatagramSocket()
+            val packet = DatagramPacket(buffer, buffer.size)
+            socket.apply {
+                connect(address)
+                send(packet)
+                close()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
