@@ -111,12 +111,12 @@
                 app:layout_constraintTop_toTopOf="parent" />
 
             <CheckBox
-                android:id="@+id/check_simple_air"
+                android:id="@+id/check_enable_air"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginTop="8dp"
-                android:text="@string/simple_air"
+                android:text="Enable Air"
                 android:textColor="@color/white"
                 app:layout_constraintStart_toEndOf="@+id/button_card"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -168,10 +168,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:background="@drawable/highlight_border_1dp"
-                android:text="@string/test"
-                android:textColor="@color/white"
                 android:clickable="true"
                 android:focusable="true"
+                android:text="@string/test"
+                android:textColor="@color/white"
                 app:layout_constraintStart_toEndOf="@id/check_debug"
                 app:layout_constraintTop_toTopOf="@+id/check_debug" />
 
@@ -192,7 +192,7 @@
                 android:id="@+id/check_show_delay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="4dp"
                 android:text="@string/show_delay"
                 android:textColor="@color/white"
                 app:layout_constraintStart_toEndOf="@+id/button_service"
@@ -202,11 +202,21 @@
                 android:id="@+id/check_vibrate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="4dp"
                 android:text="@string/enable_vibration"
                 android:textColor="@color/white"
                 app:layout_constraintStart_toEndOf="@+id/check_show_delay"
                 app:layout_constraintTop_toTopOf="@+id/check_show_delay" />
+
+            <CheckBox
+                android:id="@+id/check_simple_air"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="@string/simple_air"
+                android:textColor="@color/white"
+                app:layout_constraintStart_toEndOf="@+id/check_vibrate"
+                app:layout_constraintTop_toTopOf="@+id/check_vibrate" />
 
             <TextView
                 android:id="@+id/text_mode"
@@ -222,9 +232,9 @@
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="@+id/check_vibrate"
-                app:layout_constraintStart_toEndOf="@+id/check_vibrate"
-                app:layout_constraintTop_toTopOf="@+id/check_vibrate" />
+                app:layout_constraintBottom_toBottomOf="@+id/check_simple_air"
+                app:layout_constraintStart_toEndOf="@+id/check_simple_air"
+                app:layout_constraintTop_toTopOf="@+id/check_simple_air" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </net.cachapa.expandablelayout.ExpandableLayout>

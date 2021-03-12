@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var mTestButton = false
     private var mServiceButton = false
     private data class InputEvent(val keys: MutableSet<Int>? = null, val airHeight : Int = 6, val testButton: Boolean = false, val serviceButton: Boolean = false)
-    private var mInputQueue = ArrayDeque<InputEvent>()
+    //private var mInputQueue = ArrayDeque<InputEvent>()
 
     // LEDs
     private lateinit var mLEDBitmap: Bitmap
@@ -241,26 +241,38 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.button_coin).setOnClickListener {
             if(!mExitFlag)
-                sendFunctionKey(parseAddress(editServer.text.toString()), FUNCTION_BUTTON.FUNCTION_COIN)
+                sendFunctionKey(parseAddress(editServer.text.toString()), FunctionButton.FUNCTION_COIN)
         }
         findViewById<Button>(R.id.button_card).setOnClickListener {
             if(!mExitFlag)
-                sendFunctionKey(parseAddress(editServer.text.toString()), FUNCTION_BUTTON.FUNCTION_CARD)
+                sendFunctionKey(parseAddress(editServer.text.toString()), FunctionButton.FUNCTION_CARD)
         }
-        findViewById<CheckBox>(R.id.check_simple_air).apply {
+
+        val checkSimpleAir = findViewById<CheckBox>(R.id.check_simple_air)
+        findViewById<CheckBox>(R.id.check_enable_air).apply {
+            setOnCheckedChangeListener { _, isChecked ->
+                mEnableAir = isChecked
+                checkSimpleAir.isEnabled = isChecked
+                app.enableAir = isChecked
+            }
+            isChecked = app.enableAir
+        }
+        checkSimpleAir.apply {
             setOnCheckedChangeListener { _, isChecked ->
                 mSimpleAir = isChecked
                 app.simpleAir = isChecked
             }
             isChecked = app.simpleAir
         }
+        mEnableAir = app.enableAir
+        mSimpleAir = app.simpleAir
 
         findViewById<View>(R.id.button_test).setOnTouchListener { view, event ->
             mTestButton = when(event.actionMasked) {
                 MotionEvent.ACTION_MOVE, MotionEvent.ACTION_DOWN -> true
                 else -> false
             }
-            mInputQueue.add(InputEvent(serviceButton = mServiceButton, testButton = mTestButton))
+            //mInputQueue.add(InputEvent(serviceButton = mServiceButton, testButton = mTestButton))
             view.performClick()
         }
         findViewById<View>(R.id.button_service).setOnTouchListener { view, event ->
@@ -268,7 +280,7 @@ class MainActivity : AppCompatActivity() {
                 MotionEvent.ACTION_MOVE, MotionEvent.ACTION_DOWN -> true
                 else -> false
             }
-            mInputQueue.add(InputEvent(serviceButton = mServiceButton, testButton = mTestButton))
+            //mInputQueue.add(InputEvent(serviceButton = mServiceButton, testButton = mTestButton))
             view.performClick()
         }
 
@@ -382,7 +394,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 } else {
                     val socket = try {
-                        DatagramSocket(52468).apply {
+                        DatagramSocket(serverPort).apply {
                             reuseAddress = true
                             soTimeout = 1000
                         }
@@ -497,7 +509,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    enum class FUNCTION_BUTTON {
+    enum class FunctionButton {
         UNDEFINED, FUNCTION_COIN, FUNCTION_CARD
     }
 
@@ -510,33 +522,20 @@ class MainActivity : AppCompatActivity() {
         var serviceBtn = false
     }
 
-    private fun sendAir(server: String, port: Int) {
-        val address = InetSocketAddress(server, port)
-        val socket = DatagramSocket()
-        val buffer = byteArrayOf(0x04, 'A'.toByte(), 'I'.toByte(), 'R'.toByte(), if (mEnableAir) 0x01 else 0x00)
-        val packet = DatagramPacket(buffer, buffer.size)
-        socket.apply {
-            connect(address)
-            send(packet)
-            close()
-        }
-    }
-
-    private fun getLocalIPAddress(useIPv4: Boolean): String {
+    private fun getLocalIPAddress(useIPv4: Boolean): ByteArray {
         try {
             val interfaces: List<NetworkInterface> = Collections.list(NetworkInterface.getNetworkInterfaces())
             for (intf in interfaces) {
                 val addrs: List<InetAddress> = Collections.list(intf.inetAddresses)
                 for (addr in addrs) {
                     if (!addr.isLoopbackAddress) {
-                        val sAddr = addr.hostAddress
-                        val isIPv4 = sAddr.indexOf(':') < 0
+                        val sAddr = addr.address
+                        val isIPv4 = sAddr.size == 4
                         if (useIPv4) {
                             if (isIPv4) return sAddr
                         } else {
                             if (!isIPv4) {
-                                val delim = sAddr.indexOf('%') // drop ip6 zone suffix
-                                return if (delim < 0) sAddr.toUpperCase(Locale.ROOT) else sAddr.substring(0, delim).toUpperCase(Locale.ROOT)
+                                return sAddr
                             }
                         }
                     }
@@ -544,17 +543,21 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
         }
-        return ""
+        return byteArrayOf()
     }
 
     private fun sendConnect(address: InetSocketAddress?) {
         address ?: return
         thread {
             val selfAddress = getLocalIPAddress(true)
-            val buffer = ByteArray(24)
-            byteArrayOf(23, 'C'.toByte(), 'O'.toByte(), 'N'.toByte()).copyInto(buffer)
-            selfAddress.toByteArray().copyInto(buffer, 4)
-            serverPort.toString().toByteArray().copyInto(buffer, 4 + 15)
+            if (selfAddress.isEmpty()) return@thread
+            val buffer = ByteArray(21)
+            byteArrayOf('C'.toByte(), 'O'.toByte(), 'N'.toByte()).copyInto(buffer, 1)
+            ByteBuffer.wrap(buffer)
+                    .put(4, if (selfAddress.size == 4) 1.toByte() else 2.toByte())
+                    .putShort(5, serverPort.toShort())
+            selfAddress.copyInto(buffer, 7)
+            buffer[0] = (3 + 1 + 2 + selfAddress.size).toByte()
             try {
                 val socket = DatagramSocket()
                 val packet = DatagramPacket(buffer, buffer.size)
@@ -596,7 +599,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun sendFunctionKey(address: InetSocketAddress?, function: FUNCTION_BUTTON) {
+    private fun sendFunctionKey(address: InetSocketAddress?, function: FunctionButton) {
         address ?: return
         thread {
             val buffer = byteArrayOf(4, 'F'.toByte(), 'N'.toByte(), 'C'.toByte(), function.ordinal.toByte())
@@ -667,7 +670,8 @@ class MainActivity : AppCompatActivity() {
         val realBuf = ByteArray(44)
         realBuf[0] = buffer.length.toByte()
         buffer.header.copyInto(realBuf, 1)
-        buffer.air.copyInto(realBuf, 4)
+        if (mEnableAir)
+            buffer.air.copyInto(realBuf, 4)
         buffer.slider.copyInto(realBuf, 10)
         realBuf[42] = if (buffer.testBtn) 0x01 else 0x00
         realBuf[43] = if (buffer.serviceBtn) 0x01 else 0x00
@@ -684,7 +688,6 @@ class MainActivity : AppCompatActivity() {
     private var mLastAirUpdateTime = 0L
     private fun applyKeys(event: InputEvent, buffer: IoBuffer): IoBuffer {
         return buffer.apply {
-            buffer.length = 43
             buffer.header = byteArrayOf('I'.toByte(), 'N'.toByte(), 'P'.toByte())
             if (event.keys != null && event.keys.isNotEmpty()) {
                 for (i in 0 until 32) {
@@ -692,16 +695,20 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - mLastAirUpdateTime > airUpdateInterval) {
-                mLastAirHeight += if (mLastAirHeight < mCurrentAirHeight) 1 else if (mLastAirHeight > mCurrentAirHeight) -1 else 0
-                mLastAirUpdateTime = currentTime
-            }
-            if (mLastAirHeight != 6) {
-                for (i in mLastAirHeight..5) {
-                    buffer.air[mAirIdx[i]] = 1
+            buffer.length = if (mEnableAir) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - mLastAirUpdateTime > airUpdateInterval) {
+                    mLastAirHeight += if (mLastAirHeight < mCurrentAirHeight) 1 else if (mLastAirHeight > mCurrentAirHeight) -1 else 0
+                    mLastAirUpdateTime = currentTime
                 }
-            }
+                if (mLastAirHeight != 6) {
+                    for (i in mLastAirHeight..5) {
+                        buffer.air[mAirIdx[i]] = 1
+                    }
+                }
+                43
+            } else 37
+
             buffer.serviceBtn = event.serviceButton
             buffer.testBtn = event.testButton
         }
