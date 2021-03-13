@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     // TCP
     private var mTCPMode = false
-    private var mTCPSocket = Socket()
+    private lateinit var mTCPSocket : Socket
 
     // state
     private val numOfButtons = 16
@@ -225,6 +225,7 @@ class MainActivity : AppCompatActivity() {
                 val address = parseAddress(server)
                 if (!mTCPMode)
                     sendConnect(address)
+                currentPacketId = 1
                 senderTask.execute(lifecycleScope, address)
                 receiverTask.execute(lifecycleScope, address)
                 pingPongTask.execute(lifecycleScope)
@@ -372,7 +373,7 @@ class MainActivity : AppCompatActivity() {
                 if (mTCPMode) {
                     val buffer = ByteArray(256)
                     while (!mExitFlag) {
-                        if (!mTCPSocket.isConnected || mTCPSocket.isClosed) {
+                        if (!this::mTCPSocket.isInitialized || !mTCPSocket.isConnected || mTCPSocket.isClosed) {
                             Thread.sleep(50)
                             continue
                         }
@@ -432,24 +433,20 @@ class MainActivity : AppCompatActivity() {
             doInBackground = {
                 val address = it[0] ?: return@make
                 if (mTCPMode) {
-                    if (mTCPSocket.isClosed)
-                        mTCPSocket = Socket()
-                    if (!mTCPSocket.isConnected)
-                        mTCPSocket.connect(address)
+                    mTCPSocket = Socket()
+                    mTCPSocket.connect(address)
                     while (!mExitFlag) {
                         if (mShowDelay)
                             sendTCPPing()
                         val buttons = InputEvent(mLastButtons, mCurrentAirHeight, mTestButton, mServiceButton)
                         val buffer = applyKeys(buttons, IoBuffer())
                         try {
-                            mTCPSocket.getOutputStream().apply {
-                                write(constructBuffer(buffer))
-                                flush()
-                            }
+                            mTCPSocket.getOutputStream().write(constructBuffer(buffer))
                         } catch (e: Exception) {
                             e.printStackTrace()
                             continue
                         }
+                        //Thread.yield()
                         Thread.sleep(1)
                     }
                 } else {
@@ -530,13 +527,10 @@ class MainActivity : AppCompatActivity() {
                 for (addr in addrs) {
                     if (!addr.isLoopbackAddress) {
                         val sAddr = addr.address
-                        val isIPv4 = sAddr.size == 4
                         if (useIPv4) {
-                            if (isIPv4) return sAddr
+                            if (addr is Inet4Address) return sAddr
                         } else {
-                            if (!isIPv4) {
-                                return sAddr
-                            }
+                            if (addr is Inet6Address) return sAddr
                         }
                     }
                 }
@@ -666,15 +660,22 @@ class MainActivity : AppCompatActivity() {
         return (currentTime - lastPingTime) / 2000000.0f
     }
 
+    private var currentPacketId = 1
     private fun constructBuffer(buffer: IoBuffer): ByteArray {
-        val realBuf = ByteArray(44)
+        val realBuf = ByteArray(48)
         realBuf[0] = buffer.length.toByte()
         buffer.header.copyInto(realBuf, 1)
-        if (mEnableAir)
-            buffer.air.copyInto(realBuf, 4)
-        buffer.slider.copyInto(realBuf, 10)
-        realBuf[42] = if (buffer.testBtn) 0x01 else 0x00
-        realBuf[43] = if (buffer.serviceBtn) 0x01 else 0x00
+        ByteBuffer.wrap(realBuf).putInt(4, currentPacketId++)
+        if (mEnableAir) {
+            buffer.air.copyInto(realBuf, 8)
+            buffer.slider.copyInto(realBuf, 14)
+            realBuf[46] = if (buffer.testBtn) 0x01 else 0x00
+            realBuf[47] = if (buffer.serviceBtn) 0x01 else 0x00
+        } else {
+            buffer.slider.copyInto(realBuf, 10)
+            realBuf[40] = if (buffer.testBtn) 0x01 else 0x00
+            realBuf[41] = if (buffer.serviceBtn) 0x01 else 0x00
+        }
         return realBuf
     }
 
@@ -688,14 +689,21 @@ class MainActivity : AppCompatActivity() {
     private var mLastAirUpdateTime = 0L
     private fun applyKeys(event: InputEvent, buffer: IoBuffer): IoBuffer {
         return buffer.apply {
-            buffer.header = byteArrayOf('I'.toByte(), 'N'.toByte(), 'P'.toByte())
+            if (mEnableAir) {
+                buffer.length = 47
+                buffer.header = byteArrayOf('I'.toByte(), 'N'.toByte(), 'P'.toByte())
+            } else {
+                buffer.length = 41
+                buffer.header = byteArrayOf('I'.toByte(), 'P'.toByte(), 'T'.toByte())
+            }
+
             if (event.keys != null && event.keys.isNotEmpty()) {
                 for (i in 0 until 32) {
                     buffer.slider[31 - i] = if (event.keys.contains(i)) 0x80.toByte() else 0x0
                 }
             }
 
-            buffer.length = if (mEnableAir) {
+            if (mEnableAir) {
                 val currentTime = System.currentTimeMillis()
                 if (currentTime - mLastAirUpdateTime > airUpdateInterval) {
                     mLastAirHeight += if (mLastAirHeight < mCurrentAirHeight) 1 else if (mLastAirHeight > mCurrentAirHeight) -1 else 0
@@ -706,8 +714,7 @@ class MainActivity : AppCompatActivity() {
                         buffer.air[mAirIdx[i]] = 1
                     }
                 }
-                43
-            } else 37
+            }
 
             buffer.serviceBtn = event.serviceButton
             buffer.testBtn = event.testButton
