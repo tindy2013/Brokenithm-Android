@@ -5,6 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.*
 import android.util.DisplayMetrics
 import android.view.*
@@ -19,6 +23,7 @@ import java.net.*
 import java.nio.ByteBuffer
 import java.util.*
 import kotlin.concurrent.thread
+import kotlin.math.abs
 
 class MainActivity : AppCompatActivity() {
     private lateinit var senderTask: AsyncTaskUtil.AsyncTask<InetSocketAddress?, Unit, Unit>
@@ -64,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
     // view
     private var mEnableAir = true
+    private var mAirSource = 3
     private var mSimpleAir = false
     private var mDebugInfo = false
     private var mShowDelay = false
@@ -71,6 +77,52 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mDelayText: TextView
     private var windowWidth = 0
     private var windowHeight = 0
+
+    // sensor
+    private var mSensorManager: SensorManager? = null
+    private var mSensorCallback: ((Float) -> Unit)? = null
+    private val listener = object : SensorEventListener {
+
+        val threshold = 2f
+        var current = 0
+        var lastAcceleration = 0f
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+            return
+        }
+
+        override fun onSensorChanged(event: SensorEvent?) {
+            event ?: return
+            when (event.sensor.type) {
+                Sensor.TYPE_LINEAR_ACCELERATION -> {
+                    if (mAirSource != 2)
+                        return
+                    if (lastAcceleration != 0f) {
+                        val accelX = (lastAcceleration - event.values[0])
+                        if (accelX >= threshold && current >= 0)
+                            current --
+                        else if (accelX <= -threshold && current <= 0)
+                            current ++
+                        if (current > 0)
+                            mCurrentAirHeight = 0
+                        else if (current < 0)
+                            mCurrentAirHeight = 6
+                    }
+                    lastAcceleration = event.values[0]
+                }
+                Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
+                    if (mAirSource != 1)
+                        return
+                    val rotationVector = FloatArray(9)
+                    SensorManager.getRotationMatrixFromVector(rotationVector, event.values)
+                    val orientation = FloatArray(3)
+                    SensorManager.getOrientation(rotationVector, orientation)
+                    mSensorCallback?.invoke(orientation[2])
+                    return
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -200,7 +252,8 @@ class MainActivity : AppCompatActivity() {
                     mVibrationQueue.clear()
             }
             mLastButtons = touchedButtons
-            mCurrentAirHeight = thisAirHeight
+            if (mAirSource == 3)
+                mCurrentAirHeight = thisAirHeight
             //mInputQueue.add(InputEvent(touchedButtons, mCurrentAirHeight))
             if (mDebugInfo)
                 textInfo.text = getString(R.string.debug_info, mCurrentAirHeight, touchedButtons.toString(), event.toString())
@@ -257,6 +310,43 @@ class MainActivity : AppCompatActivity() {
                 app.enableAir = isChecked
             }
             isChecked = app.enableAir
+            checkSimpleAir.isEnabled = isChecked
+        }
+        mAirSource = app.airSource
+        findViewById<TextView>(R.id.text_switch_air).apply {
+            setOnClickListener {
+                mAirSource = when (mAirSource) {
+                    0 -> {
+                        text = getString(R.string.gyro_air)
+                        mEnableAir = true
+                        checkSimpleAir.isEnabled = true
+                        1
+                    }
+                    1 -> {
+                        text = getString(R.string.accel_air)
+                        checkSimpleAir.isEnabled = false
+                        2
+                    }
+                    2 -> {
+                        text = getString(R.string.touch_air)
+                        checkSimpleAir.isEnabled = true
+                        3
+                    }
+                    else -> {
+                        text = getString(R.string.disable_air)
+                        checkSimpleAir.isEnabled = false
+                        mEnableAir = false
+                        0
+                    }
+                }
+                app.airSource = mAirSource
+            }
+            text = getString(when (mAirSource) {
+                0 -> { checkSimpleAir.isEnabled = false; R.string.disable_air }
+                1 -> { checkSimpleAir.isEnabled = true; R.string.gyro_air }
+                2 -> { checkSimpleAir.isEnabled = false; R.string.accel_air }
+                else -> { checkSimpleAir.isEnabled = true; R.string.touch_air }
+            })
         }
         checkSimpleAir.apply {
             setOnCheckedChangeListener { _, isChecked ->
@@ -315,6 +405,42 @@ class MainActivity : AppCompatActivity() {
             //mButtons.add(findViewById(id))
 
         vibratorTask.execute(lifecycleScope)
+
+        mSensorCallback = {
+            val lowest = 0.8f
+            val highest = 1.35f
+            val steps = (highest - lowest) / numOfAirBlock
+            val current = abs(it)
+            mCurrentAirHeight = if (mSimpleAir) {
+                when (current) {
+                    in 0f..lowest -> 6
+                    else -> 0
+                }
+            } else {
+                when (current) {
+                    in 0f..lowest -> 6
+                    in lowest..highest -> {
+                        ((highest - current) / steps).toInt()
+                    }
+                    else -> 0
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (mSensorManager == null)
+            mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val gyro = mSensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+        mSensorManager?.registerListener(listener, gyro, 10000)
+        val accel = mSensorManager?.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        mSensorManager?.registerListener(listener, accel, 10000)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mSensorManager?.unregisterListener(listener)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -433,8 +559,15 @@ class MainActivity : AppCompatActivity() {
             doInBackground = {
                 val address = it[0] ?: return@make
                 if (mTCPMode) {
-                    mTCPSocket = Socket()
-                    mTCPSocket.connect(address)
+                    try {
+                        mTCPSocket = Socket().apply {
+                            tcpNoDelay = true
+                        }
+                        mTCPSocket.connect(address)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        return@make
+                    }
                     while (!mExitFlag) {
                         if (mShowDelay)
                             sendTCPPing()
@@ -450,8 +583,21 @@ class MainActivity : AppCompatActivity() {
                         Thread.sleep(1)
                     }
                 } else {
-                    val socket = DatagramSocket()
-                    socket.connect(address)
+                    val socket = try {
+                        DatagramSocket().apply {
+                            reuseAddress = true
+                            soTimeout = 1000
+                        }
+                    } catch (e: BindException) {
+                        e.printStackTrace()
+                        return@make
+                    }
+                    try {
+                        socket.connect(address)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        return@make
+                    }
                     while (!mExitFlag) {
                         if (mShowDelay)
                             sendPing(address)

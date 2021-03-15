@@ -21,4 +21,9 @@
 
     <string name="tcp">TCP</string>
     <string name="udp">UDP</string>
+
+    <string name="disable_air">Disable Air</string>
+    <string name="gyro_air">Gyro Air</string>
+    <string name="accel_air">Accel Air</string>
+    <string name="touch_air">Touch Air</string>
 </resources>

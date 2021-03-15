@@ -23,6 +23,16 @@ class BrokenithmApplication : Application() {
             config.edit().putBoolean("enable_air", value).apply()
         }
 
+    var airSource: Int
+        get() {
+            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
+            return config.getInt("air_source", 3)
+        }
+        set(value) {
+            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
+            config.edit().putInt("air_source", value).apply()
+        }
+
     var simpleAir: Boolean
         get() {
             val config = getSharedPreferences(settings_preference, MODE_PRIVATE)

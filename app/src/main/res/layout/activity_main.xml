@@ -118,8 +118,25 @@
                 android:layout_marginTop="8dp"
                 android:text="Enable Air"
                 android:textColor="@color/white"
+                android:visibility="gone"
                 app:layout_constraintStart_toEndOf="@+id/button_card"
                 app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/text_switch_air"
+                android:layout_width="90dp"
+                android:layout_height="0dp"
+                android:layout_marginStart="8dp"
+                android:background="#444444"
+                android:foreground="?android:attr/selectableItemBackground"
+                android:gravity="center"
+                android:padding="8dp"
+                android:text="Disable Air"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="@+id/button_card"
+                app:layout_constraintStart_toEndOf="@+id/button_card"
+                app:layout_constraintTop_toTopOf="@+id/button_card" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="195dp"
@@ -228,7 +245,7 @@
                 android:focusable="true"
                 android:foreground="?android:attr/selectableItemBackground"
                 android:padding="8dp"
-                android:text="UDP"
+                android:text="@string/udp"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
