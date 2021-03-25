@@ -43,11 +43,13 @@ class MainActivity : AppCompatActivity() {
     private val numOfGaps = 16
     private val buttonWidthToGap = 7.428571f
     private val numOfAirBlock = 6
+    private val fatTouchSizeThreshold = 0.034f
+    private val extraFatTouchSizeThreshold = 0.041f
     private var mCurrentDelay = 0f
 
     // Buttons
     private var mCurrentAirHeight = 6
-    private var mLastButtons = mutableSetOf<Int>()
+    private var mLastButtons = HashSet<Int>()
     private var mTestButton = false
     private var mServiceButton = false
     private data class InputEvent(val keys: MutableSet<Int>? = null, val airHeight : Int = 6, val testButton: Boolean = false, val serviceButton: Boolean = false)
@@ -194,9 +196,12 @@ class MainActivity : AppCompatActivity() {
                 textExpand.callOnClick()
             view ?: return@setOnTouchListener view.performClick()
             event ?: return@setOnTouchListener view.performClick()
+            val currentAirAreaHeight = if (mAirSource != 3) 0f else airAreaHeight
+            val currentButtonAreaHeight = if (mAirSource != 3) 0f else buttonAreaHeight
             val totalTouches = event.pointerCount
-            val touchedButtons = mutableSetOf<Int>()
+            val touchedButtons = HashSet<Int>()
             var thisAirHeight = 6
+            var maxTouchedSize = 0f
             if (event.action != KeyEvent.ACTION_UP && event.action != MotionEvent.ACTION_CANCEL) {
                 var ignoredIndex = -1
                 if (event.actionMasked == MotionEvent.ACTION_POINTER_UP)
@@ -207,14 +212,14 @@ class MainActivity : AppCompatActivity() {
                     val x = event.getX(i) + view.left
                     val y = event.getY(i) + view.top
                     when(y) {
-                        in 0f..airAreaHeight -> {
+                        in 0f..currentAirAreaHeight -> {
                             thisAirHeight = 0
                         }
-                        in airAreaHeight..buttonAreaHeight -> {
+                        in currentAirAreaHeight..currentButtonAreaHeight -> {
                             val curAir = ((y - airAreaHeight) / airBlockHeight).toInt()
                             thisAirHeight = if(mSimpleAir) 0 else thisAirHeight.coerceAtMost(curAir)
                         }
-                        in buttonAreaHeight..windowHeight.toFloat() -> {
+                        in currentButtonAreaHeight..windowHeight.toFloat() -> {
                             //val centerButton = (x / buttonBlockWidth).toInt() + 1
                             //val leftButton = (centerButton - 1).coerceAtLeast(1)
                             //val rightButton = (centerButton + 1).coerceAtMost(32)
@@ -223,9 +228,49 @@ class MainActivity : AppCompatActivity() {
                             val pointPos = x / buttonBlockWidth
                             var index = pointPos.toInt()
                             if (index > numOfButtons) index = numOfButtons
-                            var realIndex = index * 2
-                            if (touchedButtons.contains(realIndex)) realIndex++
-                            touchedButtons.add(realIndex)
+
+                            var centerButton = index * 2
+                            if (touchedButtons.contains(centerButton)) centerButton++
+                            var leftButton = ((index - 1) * 2).coerceAtLeast(0)
+                            if (touchedButtons.contains(leftButton)) leftButton++
+                            var rightButton = ((index + 1) * 2).coerceAtMost(numOfButtons * 2)
+                            if (touchedButtons.contains(rightButton)) rightButton++
+                            var left2Button = ((index - 2) * 2).coerceAtLeast(0)
+                            if (touchedButtons.contains(left2Button)) left2Button++
+                            var right2Button = ((index + 2) * 2).coerceAtMost(numOfButtons * 2)
+                            if (touchedButtons.contains(right2Button)) right2Button++
+
+                            val currentSize = event.getSize(i)
+                            maxTouchedSize = maxTouchedSize.coerceAtLeast(currentSize)
+
+                            touchedButtons.add(centerButton)
+                            when ((pointPos - index) * 4) {
+                                in 0f..1f -> {
+                                    touchedButtons.add(leftButton)
+                                    if (currentSize >= extraFatTouchSizeThreshold) {
+                                        touchedButtons.add(left2Button)
+                                        touchedButtons.add(rightButton)
+                                    }
+                                }
+                                in 1f..3f -> {
+                                    if (currentSize >= fatTouchSizeThreshold) {
+                                        touchedButtons.add(leftButton)
+                                        touchedButtons.add(rightButton)
+                                    }
+                                    if (currentSize >= extraFatTouchSizeThreshold) {
+                                        touchedButtons.add(left2Button)
+                                        touchedButtons.add(right2Button)
+                                    }
+                                }
+                                in 3f..4f -> {
+                                    touchedButtons.add(rightButton)
+                                    if (currentSize >= extraFatTouchSizeThreshold) {
+                                        touchedButtons.add(leftButton)
+                                        touchedButtons.add(right2Button)
+                                    }
+                                }
+                            }
+                            /*
                             if (index > 0) {
                                 if ((pointPos - index) * 4 < 1) {
                                     realIndex = (index - 1) * 2
@@ -239,6 +284,7 @@ class MainActivity : AppCompatActivity() {
                                     touchedButtons.add(realIndex)
                                 }
                             }
+                             */
                         }
                     }
                 }
@@ -256,7 +302,7 @@ class MainActivity : AppCompatActivity() {
                 mCurrentAirHeight = thisAirHeight
             //mInputQueue.add(InputEvent(touchedButtons, mCurrentAirHeight))
             if (mDebugInfo)
-                textInfo.text = getString(R.string.debug_info, mCurrentAirHeight, touchedButtons.toString(), event.toString())
+                textInfo.text = getString(R.string.debug_info, mCurrentAirHeight, touchedButtons.toString(), maxTouchedSize, event.toString())
             view.performClick()
         }
 
@@ -432,7 +478,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (mSensorManager == null)
             mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val gyro = mSensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+        val gyro = mSensorManager?.getDefaultSensor(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) Sensor.TYPE_GAME_ROTATION_VECTOR else Sensor.TYPE_ROTATION_VECTOR)
         mSensorManager?.registerListener(listener, gyro, 10000)
         val accel = mSensorManager?.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
         mSensorManager?.registerListener(listener, accel, 10000)
@@ -531,10 +577,17 @@ class MainActivity : AppCompatActivity() {
                     }
                     val buffer = ByteArray(256)
                     val packet = DatagramPacket(buffer, buffer.size)
+                    fun InetSocketAddress.toHostString(): String? {
+                        if (hostName != null)
+                            return hostName
+                        if (this.address != null)
+                            return this.address.hostName ?: this.address.hostAddress
+                        return null
+                    }
                     while (!mExitFlag) {
                         try {
                             socket.receive(packet)
-                            if (packet.address.hostAddress == address.hostString && packet.port == address.port) {
+                            if (packet.address.hostAddress == address.toHostString() && packet.port == address.port) {
                                 val data = packet.data
                                 if (data.size >= 3) {
                                     if (data.size >= 100 && data[1] == 'L'.toByte() && data[2] == 'E'.toByte() && data[3] == 'D'.toByte()) {
@@ -601,21 +654,17 @@ class MainActivity : AppCompatActivity() {
                     while (!mExitFlag) {
                         if (mShowDelay)
                             sendPing(address)
-                        //while (!mInputQueue.isEmpty() && mInputQueue.peek() == null)
-                        //mInputQueue.pop()
-                        //val buttons = mInputQueue.poll()
                         val buttons = InputEvent(mLastButtons, mCurrentAirHeight, mTestButton, mServiceButton)
-                        if (buttons != null/* || mLastAirHeight != mCurrentAirHeight*/) {
-                            val buffer = applyKeys(buttons/* ?: InputEvent()*/, IoBuffer())
-                            val packet = constructPacket(buffer)
-                            try {
-                                socket.send(packet)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                                Thread.sleep(100)
-                                continue
-                            }
+                        val buffer = applyKeys(buttons/* ?: InputEvent()*/, IoBuffer())
+                        val packet = constructPacket(buffer)
+                        try {
+                            socket.send(packet)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            Thread.sleep(100)
+                            continue
                         }
+                        //Thread.sleep(2)
                         Thread.sleep(1)
                     }
                     socket.close()

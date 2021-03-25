@@ -12,7 +12,7 @@
     <string name="test">Test</string>
     <string name="service">Service</string>
     <string name="show_debug_info">Debug</string>
-    <string name="debug_info">touched: air:%d %s\n%s</string>
+    <string name="debug_info">touched: air:%d %s size:%f\n%s</string>
     <string name="current_latency">Current Latency: %f ms</string>
     <string name="press_again_to_exit">Press again to exit</string>
     <string name="show_delay">Show Delay</string>
@@ -26,4 +26,5 @@
     <string name="gyro_air">Gyro Air</string>
     <string name="accel_air">Accel Air</string>
     <string name="touch_air">Touch Air</string>
+    <string name="enable_air">Enable Air</string>
 </resources>
