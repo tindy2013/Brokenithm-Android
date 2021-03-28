@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Point
 import android.graphics.drawable.BitmapDrawable
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -77,8 +78,8 @@ class MainActivity : AppCompatActivity() {
     private var mShowDelay = false
     private var mEnableVibrate = true
     private lateinit var mDelayText: TextView
-    private var windowWidth = 0
-    private var windowHeight = 0
+    private var windowWidth = 0f
+    private var windowHeight = 0f
 
     // sensor
     private var mSensorManager: SensorManager? = null
@@ -174,11 +175,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /*
         val dm = DisplayMetrics()
-        (applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getMetrics(dm)
-        windowWidth = dm.widthPixels
-        windowHeight = dm.heightPixels
-        gapWidth = windowWidth.toFloat() / (numOfButtons * buttonWidthToGap + numOfGaps)
+        (applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(dm)
+        windowWidth = dm.widthPixels.toFloat()
+        windowHeight = dm.heightPixels.toFloat()*/
+        val point = Point()
+        (application.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealSize(point)
+        windowWidth = point.x.toFloat()
+        windowHeight = point.y.toFloat()
+        gapWidth = windowWidth / (numOfButtons * buttonWidthToGap + numOfGaps)
         buttonWidth = gapWidth * buttonWidthToGap
         //val buttonWidth = windowWidth / numOfButtons
         val buttonBlockWidth = buttonWidth + gapWidth
@@ -186,7 +192,7 @@ class MainActivity : AppCompatActivity() {
         val airAreaHeight = windowHeight * 0.35f
         val airBlockHeight = (buttonAreaHeight - airAreaHeight) / numOfAirBlock
 
-        mLEDBitmap = Bitmap.createBitmap(windowWidth, buttonAreaHeight.toInt(), Bitmap.Config.RGB_565)
+        mLEDBitmap = Bitmap.createBitmap(windowWidth.toInt(), buttonAreaHeight.toInt(), Bitmap.Config.RGB_565)
         mLEDCanvas = Canvas(mLEDBitmap)
         mButtonRenderer = findViewById(R.id.button_render_area)
         mButtonRenderer.background = BitmapDrawable(resources, mLEDBitmap)
@@ -219,12 +225,7 @@ class MainActivity : AppCompatActivity() {
                             val curAir = ((y - airAreaHeight) / airBlockHeight).toInt()
                             thisAirHeight = if(mSimpleAir) 0 else thisAirHeight.coerceAtMost(curAir)
                         }
-                        in currentButtonAreaHeight..windowHeight.toFloat() -> {
-                            //val centerButton = (x / buttonBlockWidth).toInt() + 1
-                            //val leftButton = (centerButton - 1).coerceAtLeast(1)
-                            //val rightButton = (centerButton + 1).coerceAtMost(32)
-                            //touchedButtons.addAll(listOf(leftButton, centerButton, rightButton))
-                            //touchedButtons.addAll(listOf((centerButton * 2 - 1), centerButton * 2))
+                        in currentButtonAreaHeight..windowHeight -> {
                             val pointPos = x / buttonBlockWidth
                             var index = pointPos.toInt()
                             if (index > numOfButtons) index = numOfButtons
@@ -270,21 +271,6 @@ class MainActivity : AppCompatActivity() {
                                     }
                                 }
                             }
-                            /*
-                            if (index > 0) {
-                                if ((pointPos - index) * 4 < 1) {
-                                    realIndex = (index - 1) * 2
-                                    if (touchedButtons.contains(realIndex)) realIndex++
-                                    touchedButtons.add(realIndex)
-                                }
-                            } else if (index < 31) {
-                                if ((pointPos - index) * 4 > 3) {
-                                    realIndex = (index + 1) * 2
-                                    if (touchedButtons.contains(realIndex)) realIndex++
-                                    touchedButtons.add(realIndex)
-                                }
-                            }
-                             */
                         }
                     }
                 }
