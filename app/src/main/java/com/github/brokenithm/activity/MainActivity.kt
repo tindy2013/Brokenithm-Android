@@ -43,8 +43,8 @@ class MainActivity : AppCompatActivity() {
     private val numOfGaps = 16
     private val buttonWidthToGap = 7.428571f
     private val numOfAirBlock = 6
-    private val fatTouchSizeThreshold = 0.034f
-    private val extraFatTouchSizeThreshold = 0.041f
+    private val fatTouchSizeThreshold = 0.027f
+    private val extraFatTouchSizeThreshold = 0.035f
     private var mCurrentDelay = 0f
 
     // Buttons
