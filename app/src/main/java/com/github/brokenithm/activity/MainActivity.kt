@@ -1,10 +1,7 @@
 package com.github.brokenithm.activity
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Point
+import android.graphics.*
 import android.graphics.drawable.BitmapDrawable
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -80,6 +77,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mDelayText: TextView
     private var windowWidth = 0f
     private var windowHeight = 0f
+    private var mTouchAreaRect: Rect? = null
 
     // sensor
     private var mSensorManager: SensorManager? = null
@@ -146,150 +144,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         mDelayText = findViewById(R.id.text_delay)
-        val textInfo = findViewById<TextView>(R.id.text_info)
-        findViewById<CheckBox>(R.id.check_debug).setOnCheckedChangeListener { _, isChecked ->
-            mDebugInfo = isChecked
-            textInfo.visibility = if (isChecked) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            }
-        }
+
         findViewById<CheckBox>(R.id.check_vibrate).apply {
             setOnCheckedChangeListener { _, isChecked ->
                 mEnableVibrate = isChecked
                 app.enableVibrate = isChecked
             }
             isChecked = app.enableVibrate
-        }
-
-        val expandControl = findViewById<ExpandableLayout>(R.id.expand_control)
-        val textExpand = findViewById<TextView>(R.id.text_expand)
-        textExpand.setOnClickListener {
-            if (expandControl.isExpanded) {
-                (it as TextView).setText(R.string.expand)
-                expandControl.collapse()
-            } else {
-                (it as TextView).setText(R.string.collapse)
-                expandControl.expand()
-            }
-        }
-
-        /*
-        val dm = DisplayMetrics()
-        (applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(dm)
-        windowWidth = dm.widthPixels.toFloat()
-        windowHeight = dm.heightPixels.toFloat()*/
-        val point = Point()
-        (application.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealSize(point)
-        windowWidth = point.x.toFloat()
-        windowHeight = point.y.toFloat()
-        gapWidth = windowWidth / (numOfButtons * buttonWidthToGap + numOfGaps)
-        buttonWidth = gapWidth * buttonWidthToGap
-        //val buttonWidth = windowWidth / numOfButtons
-        val buttonBlockWidth = buttonWidth + gapWidth
-        val buttonAreaHeight = windowHeight * 0.5f
-        val airAreaHeight = windowHeight * 0.35f
-        val airBlockHeight = (buttonAreaHeight - airAreaHeight) / numOfAirBlock
-
-        mLEDBitmap = Bitmap.createBitmap(windowWidth.toInt(), buttonAreaHeight.toInt(), Bitmap.Config.RGB_565)
-        mLEDCanvas = Canvas(mLEDBitmap)
-        mButtonRenderer = findViewById(R.id.button_render_area)
-        mButtonRenderer.background = BitmapDrawable(resources, mLEDBitmap)
-
-        findViewById<View>(R.id.touch_area).setOnTouchListener { view, event ->
-            if (expandControl.isExpanded)
-                textExpand.callOnClick()
-            view ?: return@setOnTouchListener view.performClick()
-            event ?: return@setOnTouchListener view.performClick()
-            val currentAirAreaHeight = if (mAirSource != 3) 0f else airAreaHeight
-            val currentButtonAreaHeight = if (mAirSource != 3) 0f else buttonAreaHeight
-            val totalTouches = event.pointerCount
-            val touchedButtons = HashSet<Int>()
-            var thisAirHeight = 6
-            var maxTouchedSize = 0f
-            if (event.action != KeyEvent.ACTION_UP && event.action != MotionEvent.ACTION_CANCEL) {
-                var ignoredIndex = -1
-                if (event.actionMasked == MotionEvent.ACTION_POINTER_UP)
-                    ignoredIndex = event.actionIndex
-                for (i in 0 until totalTouches) {
-                    if (i == ignoredIndex)
-                        continue
-                    val x = event.getX(i) + view.left
-                    val y = event.getY(i) + view.top
-                    when(y) {
-                        in 0f..currentAirAreaHeight -> {
-                            thisAirHeight = 0
-                        }
-                        in currentAirAreaHeight..currentButtonAreaHeight -> {
-                            val curAir = ((y - airAreaHeight) / airBlockHeight).toInt()
-                            thisAirHeight = if(mSimpleAir) 0 else thisAirHeight.coerceAtMost(curAir)
-                        }
-                        in currentButtonAreaHeight..windowHeight -> {
-                            val pointPos = x / buttonBlockWidth
-                            var index = pointPos.toInt()
-                            if (index > numOfButtons) index = numOfButtons
-
-                            var centerButton = index * 2
-                            if (touchedButtons.contains(centerButton)) centerButton++
-                            var leftButton = ((index - 1) * 2).coerceAtLeast(0)
-                            if (touchedButtons.contains(leftButton)) leftButton++
-                            var rightButton = ((index + 1) * 2).coerceAtMost(numOfButtons * 2)
-                            if (touchedButtons.contains(rightButton)) rightButton++
-                            var left2Button = ((index - 2) * 2).coerceAtLeast(0)
-                            if (touchedButtons.contains(left2Button)) left2Button++
-                            var right2Button = ((index + 2) * 2).coerceAtMost(numOfButtons * 2)
-                            if (touchedButtons.contains(right2Button)) right2Button++
-
-                            val currentSize = event.getSize(i)
-                            maxTouchedSize = maxTouchedSize.coerceAtLeast(currentSize)
-
-                            touchedButtons.add(centerButton)
-                            when ((pointPos - index) * 4) {
-                                in 0f..1f -> {
-                                    touchedButtons.add(leftButton)
-                                    if (currentSize >= extraFatTouchSizeThreshold) {
-                                        touchedButtons.add(left2Button)
-                                        touchedButtons.add(rightButton)
-                                    }
-                                }
-                                in 1f..3f -> {
-                                    if (currentSize >= fatTouchSizeThreshold) {
-                                        touchedButtons.add(leftButton)
-                                        touchedButtons.add(rightButton)
-                                    }
-                                    if (currentSize >= extraFatTouchSizeThreshold) {
-                                        touchedButtons.add(left2Button)
-                                        touchedButtons.add(right2Button)
-                                    }
-                                }
-                                in 3f..4f -> {
-                                    touchedButtons.add(rightButton)
-                                    if (currentSize >= extraFatTouchSizeThreshold) {
-                                        touchedButtons.add(leftButton)
-                                        touchedButtons.add(right2Button)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else
-                thisAirHeight = 6
-            if (mEnableVibrate) {
-                if (hasNewKeys(mLastButtons, touchedButtons))
-                    mVibrationQueue.add(vibrateLength)
-                else if (touchedButtons.isEmpty())
-                    mVibrationQueue.clear()
-            }
-            mLastButtons = touchedButtons
-            if (mAirSource == 3)
-                mCurrentAirHeight = thisAirHeight
-            //mInputQueue.add(InputEvent(touchedButtons, mCurrentAirHeight))
-            if (mDebugInfo)
-                textInfo.text = getString(R.string.debug_info, mCurrentAirHeight, touchedButtons.toString(), maxTouchedSize, event.toString())
-            view.performClick()
         }
 
         val editServer = findViewById<EditText>(R.id.edit_server).apply {
@@ -457,6 +318,165 @@ class MainActivity : AppCompatActivity() {
                     else -> 0
                 }
             }
+        }
+
+        val contentView = findViewById<ViewGroup>(android.R.id.content)
+        contentView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                contentView.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                /*
+                val dm = DisplayMetrics()
+                (applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(dm)
+                windowWidth = dm.widthPixels.toFloat()
+                windowHeight = dm.heightPixels.toFloat()*/
+                /*
+                val point = Point()
+                (application.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealSize(point)
+                windowWidth = point.x.toFloat()
+                windowHeight = point.y.toFloat()*/
+                val arr = IntArray(2)
+                contentView.getLocationOnScreen(arr)
+                windowWidth = contentView.width.toFloat()
+                windowHeight = contentView.height.toFloat()
+                initTouchArea(arr[0], arr[1])
+            }
+        })
+    }
+
+    private fun initTouchArea(windowLeft: Int, windowTop: Int) {
+        val expandControl = findViewById<ExpandableLayout>(R.id.expand_control)
+        val textExpand = findViewById<TextView>(R.id.text_expand)
+        textExpand.setOnClickListener {
+            if (expandControl.isExpanded) {
+                (it as TextView).setText(R.string.expand)
+                expandControl.collapse()
+            } else {
+                (it as TextView).setText(R.string.collapse)
+                expandControl.expand()
+            }
+        }
+
+        val textInfo = findViewById<TextView>(R.id.text_info)
+        findViewById<CheckBox>(R.id.check_debug).setOnCheckedChangeListener { _, isChecked ->
+            mDebugInfo = isChecked
+            textInfo.visibility = if (isChecked) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+        }
+
+        gapWidth = windowWidth / (numOfButtons * buttonWidthToGap + numOfGaps)
+        buttonWidth = gapWidth * buttonWidthToGap
+        //val buttonWidth = windowWidth / numOfButtons
+        val buttonBlockWidth = buttonWidth + gapWidth
+        val buttonAreaHeight = windowHeight * 0.5f
+        val airAreaHeight = windowHeight * 0.35f
+        val airBlockHeight = (buttonAreaHeight - airAreaHeight) / numOfAirBlock
+
+        mLEDBitmap = Bitmap.createBitmap(windowWidth.toInt(), buttonAreaHeight.toInt(), Bitmap.Config.RGB_565)
+        mLEDCanvas = Canvas(mLEDBitmap)
+        mButtonRenderer = findViewById(R.id.button_render_area)
+        mButtonRenderer.background = BitmapDrawable(resources, mLEDBitmap)
+
+        findViewById<View>(R.id.touch_area).setOnTouchListener { view, event ->
+            if (expandControl.isExpanded)
+                textExpand.callOnClick()
+            view ?: return@setOnTouchListener view.performClick()
+            event ?: return@setOnTouchListener view.performClick()
+            if (mTouchAreaRect == null) {
+                val arr = IntArray(2)
+                view.getLocationOnScreen(arr)
+                mTouchAreaRect = Rect(arr[0], arr[1], arr[0] + view.width, arr[1] + view.height)
+            }
+            val currentAirAreaHeight = if (mAirSource != 3) 0f else airAreaHeight
+            val currentButtonAreaHeight = if (mAirSource != 3) 0f else buttonAreaHeight
+            val totalTouches = event.pointerCount
+            val touchedButtons = HashSet<Int>()
+            var thisAirHeight = 6
+            var maxTouchedSize = 0f
+            if (event.action != KeyEvent.ACTION_UP && event.action != MotionEvent.ACTION_CANCEL) {
+                var ignoredIndex = -1
+                if (event.actionMasked == MotionEvent.ACTION_POINTER_UP)
+                    ignoredIndex = event.actionIndex
+                for (i in 0 until totalTouches) {
+                    if (i == ignoredIndex)
+                        continue
+                    val x = event.getX(i) + mTouchAreaRect!!.left - windowLeft
+                    val y = event.getY(i) + mTouchAreaRect!!.top - windowTop
+                    when(y) {
+                        in 0f..currentAirAreaHeight -> {
+                            thisAirHeight = 0
+                        }
+                        in currentAirAreaHeight..currentButtonAreaHeight -> {
+                            val curAir = ((y - airAreaHeight) / airBlockHeight).toInt()
+                            thisAirHeight = if(mSimpleAir) 0 else thisAirHeight.coerceAtMost(curAir)
+                        }
+                        in currentButtonAreaHeight..windowHeight -> {
+                            val pointPos = x / buttonBlockWidth
+                            var index = pointPos.toInt()
+                            if (index > numOfButtons) index = numOfButtons
+
+                            var centerButton = index * 2
+                            if (touchedButtons.contains(centerButton)) centerButton++
+                            var leftButton = ((index - 1) * 2).coerceAtLeast(0)
+                            if (touchedButtons.contains(leftButton)) leftButton++
+                            var rightButton = ((index + 1) * 2).coerceAtMost(numOfButtons * 2)
+                            if (touchedButtons.contains(rightButton)) rightButton++
+                            var left2Button = ((index - 2) * 2).coerceAtLeast(0)
+                            if (touchedButtons.contains(left2Button)) left2Button++
+                            var right2Button = ((index + 2) * 2).coerceAtMost(numOfButtons * 2)
+                            if (touchedButtons.contains(right2Button)) right2Button++
+
+                            val currentSize = event.getSize(i)
+                            maxTouchedSize = maxTouchedSize.coerceAtLeast(currentSize)
+
+                            touchedButtons.add(centerButton)
+                            when ((pointPos - index) * 4) {
+                                in 0f..1f -> {
+                                    touchedButtons.add(leftButton)
+                                    if (currentSize >= extraFatTouchSizeThreshold) {
+                                        touchedButtons.add(left2Button)
+                                        touchedButtons.add(rightButton)
+                                    }
+                                }
+                                in 1f..3f -> {
+                                    if (currentSize >= fatTouchSizeThreshold) {
+                                        touchedButtons.add(leftButton)
+                                        touchedButtons.add(rightButton)
+                                    }
+                                    if (currentSize >= extraFatTouchSizeThreshold) {
+                                        touchedButtons.add(left2Button)
+                                        touchedButtons.add(right2Button)
+                                    }
+                                }
+                                in 3f..4f -> {
+                                    touchedButtons.add(rightButton)
+                                    if (currentSize >= extraFatTouchSizeThreshold) {
+                                        touchedButtons.add(leftButton)
+                                        touchedButtons.add(right2Button)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+                thisAirHeight = 6
+            if (mEnableVibrate) {
+                if (hasNewKeys(mLastButtons, touchedButtons))
+                    mVibrationQueue.add(vibrateLength)
+                else if (touchedButtons.isEmpty())
+                    mVibrationQueue.clear()
+            }
+            mLastButtons = touchedButtons
+            if (mAirSource == 3)
+                mCurrentAirHeight = thisAirHeight
+            //mInputQueue.add(InputEvent(touchedButtons, mCurrentAirHeight))
+            if (mDebugInfo)
+                textInfo.text = getString(R.string.debug_info, mCurrentAirHeight, touchedButtons.toString(), maxTouchedSize, event.toString())
+            view.performClick()
         }
     }
 
