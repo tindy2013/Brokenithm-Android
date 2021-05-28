@@ -873,7 +873,7 @@ class MainActivity : AppCompatActivity() {
             realBuf[46] = if (buffer.testBtn) 0x01 else 0x00
             realBuf[47] = if (buffer.serviceBtn) 0x01 else 0x00
         } else {
-            buffer.slider.copyInto(realBuf, 10)
+            buffer.slider.copyInto(realBuf, 8)
             realBuf[40] = if (buffer.testBtn) 0x01 else 0x00
             realBuf[41] = if (buffer.serviceBtn) 0x01 else 0x00
         }
