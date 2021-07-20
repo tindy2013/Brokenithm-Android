@@ -1,14 +1,20 @@
 package com.github.brokenithm.activity
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.graphics.*
 import android.graphics.drawable.BitmapDrawable
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.nfc.NfcAdapter
+import android.nfc.NfcManager
+import android.nfc.Tag
+import android.nfc.tech.MifareClassic
 import android.os.*
-import android.util.DisplayMetrics
+import android.util.Log
 import android.view.*
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -16,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.github.brokenithm.BrokenithmApplication
 import com.github.brokenithm.R
 import com.github.brokenithm.util.AsyncTaskUtil
+import com.github.brokenithm.util.FeliCa
 import net.cachapa.expandablelayout.ExpandableLayout
 import java.net.*
 import java.nio.ByteBuffer
@@ -125,6 +132,90 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // nfc
+    private fun Byte.getBit(bit: Int) = (toInt() ushr bit) and 0x1
+    private fun MifareClassic.authenticateBlock(blockIndex: Int, keyA: ByteArray, keyB: ByteArray, write: Boolean = false): Boolean {
+        // check access bits
+        val sectorIndex = blockToSector(blockIndex)
+        val accessBitsBlock = sectorToBlock(sectorIndex) + 3
+        if (!authenticateSectorWithKeyA(sectorIndex, keyA)) return false
+        val accessBits = readBlock(accessBitsBlock)
+        val targetBit = blockIndex % 4
+        val bitC1 = accessBits[7].getBit(targetBit + 4)
+        val bitC2 = accessBits[8].getBit(targetBit)
+        val bitC3 = accessBits[8].getBit(targetBit + 4)
+        val allBits = (bitC1 shl 2) or (bitC2 shl 1) or bitC3
+        return if (write) {
+            when (allBits) {
+                0 -> true
+                3, 4, 6 -> authenticateSectorWithKeyB(sectorIndex, keyB)
+                else -> false
+            }
+        } else {
+            when (allBits) {
+                7 -> false
+                3, 5 -> authenticateSectorWithKeyB(sectorIndex, keyB)
+                else -> true
+            }
+        }
+    }
+    private fun ByteArray.toHexString() = joinToString("") { "%02x".format(it) }
+    enum class CardType {
+        CARD_AIME, CARD_FELICA
+    }
+    private var adapter: NfcAdapter? = null
+    private val mAimeKey = byteArrayOf(0x57, 0x43, 0x43, 0x46, 0x76, 0x32)
+    private var enableNFC = true
+    private var hasCard = false
+    private var cardType = CardType.CARD_AIME
+    private val cardId = ByteArray(10)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val tag: Tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG) ?: return
+        val felica = FeliCa.get(tag)
+        if (felica != null) {
+            thread {
+                try {
+                    felica.connect()
+                    felica.poll()
+                    felica.IDm?.copyInto(cardId) ?: throw IllegalStateException("Failed to fetch IDm from FeliCa")
+                    cardId[8] = 0
+                    cardId[9] = 0
+                    cardType = CardType.CARD_FELICA
+                    hasCard = true
+                    Log.d(TAG, "found felica card: ${cardId.toHexString().removeRange(16..19)}")
+                    while (felica.isConnected) Thread.sleep(50)
+                    hasCard = false
+                    felica.close()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            return
+        }
+        val mifare = MifareClassic.get(tag) ?: return
+        thread {
+            try {
+                mifare.connect()
+                if (mifare.authenticateBlock(2, keyA = mAimeKey, keyB = mAimeKey)) {
+                    Thread.sleep(100)
+                    val block = mifare.readBlock(2)
+                    block.copyInto(cardId, 0, 6, 16)
+                    cardType = CardType.CARD_AIME
+                    hasCard = true
+                    Log.d(TAG, "found aime card: ${cardId.toHexString()}")
+                    while (mifare.isConnected) Thread.sleep(50)
+                    hasCard = false
+                } else {
+                    Log.d(TAG, "nfc auth failed")
+                }
+                mifare.close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -132,6 +223,8 @@ class MainActivity : AppCompatActivity() {
         setImmersive()
         app = application as BrokenithmApplication
         vibrator = applicationContext.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        val nfcManager = getSystemService(Context.NFC_SERVICE) as NfcManager
+        adapter = nfcManager.defaultAdapter
 
         vibrateMethod = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             {
@@ -488,11 +581,31 @@ class MainActivity : AppCompatActivity() {
         mSensorManager?.registerListener(listener, gyro, 10000)
         val accel = mSensorManager?.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
         mSensorManager?.registerListener(listener, accel, 10000)
+        enableNfcForegroundDispatch()
+    }
+
+    private fun enableNfcForegroundDispatch() {
+        try {
+            val intent = Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val nfcPendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
+            adapter?.enableForegroundDispatch(this, nfcPendingIntent, null, null)
+        } catch (ex: IllegalStateException) {
+            Log.e(TAG, "Error enabling NFC foreground dispatch", ex)
+        }
+    }
+
+    private fun disableNfcForegroundDispatch() {
+        try {
+            adapter?.disableForegroundDispatch(this)
+        } catch (ex: IllegalStateException) {
+            Log.e(TAG, "Error disabling NFC foreground dispatch", ex)
+        }
     }
 
     override fun onPause() {
-        super.onPause()
+        disableNfcForegroundDispatch()
         mSensorManager?.unregisterListener(listener)
+        super.onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -634,6 +747,8 @@ class MainActivity : AppCompatActivity() {
                         val buffer = applyKeys(buttons, IoBuffer())
                         try {
                             mTCPSocket.getOutputStream().write(constructBuffer(buffer))
+                            if (enableNFC)
+                                mTCPSocket.getOutputStream().write(constructCardData())
                         } catch (e: Exception) {
                             e.printStackTrace()
                             continue
@@ -665,6 +780,8 @@ class MainActivity : AppCompatActivity() {
                         val packet = constructPacket(buffer)
                         try {
                             socket.send(packet)
+                            if (enableNFC)
+                                socket.send(constructCardPacket())
                         } catch (e: Exception) {
                             e.printStackTrace()
                             Thread.sleep(100)
@@ -720,7 +837,7 @@ class MainActivity : AppCompatActivity() {
         var serviceBtn = false
     }
 
-    private fun getLocalIPAddress(useIPv4: Boolean): ByteArray {
+    private fun getLocalIPAddress(useIPv4: Boolean = true): ByteArray {
         try {
             val interfaces: List<NetworkInterface> = Collections.list(NetworkInterface.getNetworkInterfaces())
             for (intf in interfaces) {
@@ -744,7 +861,7 @@ class MainActivity : AppCompatActivity() {
     private fun sendConnect(address: InetSocketAddress?) {
         address ?: return
         thread {
-            val selfAddress = getLocalIPAddress(true)
+            val selfAddress = getLocalIPAddress()
             if (selfAddress.isEmpty()) return@thread
             val buffer = ByteArray(21)
             byteArrayOf('C'.toByte(), 'O'.toByte(), 'N'.toByte()).copyInto(buffer, 1)
@@ -885,6 +1002,21 @@ class MainActivity : AppCompatActivity() {
         return DatagramPacket(realBuf, buffer.length + 1)
     }
 
+    private fun constructCardData(): ByteArray {
+        val buf = ByteArray(24)
+        byteArrayOf(15, 'C'.toByte(), 'R'.toByte(), 'D'.toByte()).copyInto(buf)
+        buf[4] = if (hasCard) 1 else 0
+        buf[5] = cardType.ordinal.toByte()
+        if (hasCard)
+            cardId.copyInto(buf, 6)
+        return buf
+    }
+
+    private fun constructCardPacket(): DatagramPacket {
+        val buf = constructCardData()
+        return DatagramPacket(buf, buf[0] + 1)
+    }
+
     private val airUpdateInterval = 10L
     private var mLastAirHeight = 6
     private var mLastAirUpdateTime = 0L
@@ -951,5 +1083,9 @@ class MainActivity : AppCompatActivity() {
     }
     private fun makePaint(color: Int): Paint {
         return Paint().apply { this.color = color }
+    }
+
+    companion object {
+        private const val TAG = "Brokenithm"
     }
 }
