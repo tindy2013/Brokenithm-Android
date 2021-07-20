@@ -27,6 +27,7 @@
                 <action android:name="android.nfc.action.TECH_DISCOVERED" />
             </intent-filter>
         </activity>
+        <activity android:name=".activity.SettingsActivity" android:configChanges="uiMode|orientation" />
     </application>
 
 </manifest>

@@ -1,77 +1,89 @@
 package com.github.brokenithm
 
 import android.app.Application
+import android.content.Context
+import android.content.SharedPreferences
 
 class BrokenithmApplication : Application() {
-    var lastServer: String
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getString("server", "") ?: ""
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putString("server", value).apply()
-        }
 
-    var enableAir: Boolean
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getBoolean("enable_air", true)
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putBoolean("enable_air", value).apply()
-        }
+    abstract class BasePreference<T>(context: Context, fileName: String) {
+        protected val config: SharedPreferences = context.getSharedPreferences(fileName, MODE_PRIVATE)
+        abstract fun value(): T
+        abstract fun update(value: T)
+    }
 
-    var airSource: Int
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getInt("air_source", 3)
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putInt("air_source", value).apply()
-        }
+    abstract class Settings<T>(context: Context) : BasePreference<T>(context, settings_preference)
 
-    var simpleAir: Boolean
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getBoolean("simple_air", false)
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putBoolean("simple_air", value).apply()
-        }
+    open class StringPreference(
+        context: Context,
+        private val key: String,
+        private val defValue: String
+    ) : Settings<String>(context) {
+        override fun value() = config.getString(key, defValue) ?: defValue
+        override fun update(value: String) = config.edit().putString(key, value).apply()
+    }
 
-    var showDelay: Boolean
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getBoolean("show_delay", false)
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putBoolean("show_delay", value).apply()
-        }
+    open class BooleanPreference(
+        context: Context,
+        private val key: String,
+        private val defValue: Boolean
+    ) : Settings<Boolean>(context) {
+        override fun value() = config.getBoolean(key, defValue)
+        override fun update(value: Boolean) = config.edit().putBoolean(key, value).apply()
+    }
 
-    var enableVibrate: Boolean
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getBoolean("enable_vibrate", true)
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putBoolean("enable_vibrate", value).apply()
-        }
+    open class IntegerPreference(
+        context: Context,
+        private val key: String,
+        private val defValue: Int
+    ) : Settings<Int>(context) {
+        override fun value() = config.getInt(key, defValue)
+        override fun update(value: Int) = config.edit().putInt(key, value).apply()
+    }
 
-    var tcpMode: Boolean
-        get() {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            return config.getBoolean("tcp_mode", false)
-        }
-        set(value) {
-            val config = getSharedPreferences(settings_preference, MODE_PRIVATE)
-            config.edit().putBoolean("tcp_mode", value).apply()
-        }
+    open class FloatPreference(
+        context: Context,
+        private val key: String,
+        private val defValue: Float
+    ) : Settings<Float>(context) {
+        override fun value() = config.getString(key, defValue.toString())?.toFloat() ?: defValue
+        override fun update(value: Float) = config.edit().putString(key, value.toString()).apply()
+    }
+
+    lateinit var lastServer : StringPreference
+    lateinit var enableAir : BooleanPreference
+    lateinit var airSource : IntegerPreference
+    lateinit var simpleAir : BooleanPreference
+    lateinit var showDelay : BooleanPreference
+    lateinit var enableVibrate : BooleanPreference
+    lateinit var tcpMode : BooleanPreference
+    lateinit var enableNFC : BooleanPreference
+    lateinit var wideTouchRange : BooleanPreference
+    lateinit var enableTouchSize : BooleanPreference
+    lateinit var fatTouchThreshold : FloatPreference
+    lateinit var extraFatTouchThreshold : FloatPreference
+    lateinit var gyroAirLowestBound : FloatPreference
+    lateinit var gyroAirHighestBound : FloatPreference
+    lateinit var accelAirThreshold : FloatPreference
+
+    override fun onCreate() {
+        super.onCreate()
+        lastServer = StringPreference(this, "server", "")
+        enableAir = BooleanPreference(this, "enable_air", true)
+        airSource = IntegerPreference(this, "air_source", 3)
+        simpleAir = BooleanPreference(this, "simple_air", false)
+        showDelay = BooleanPreference(this, "show_delay", false)
+        enableVibrate = BooleanPreference(this, "enable_vibrate", true)
+        tcpMode = BooleanPreference(this, "tcp_mode", false)
+        enableNFC = BooleanPreference(this, "enable_nfc", true)
+        wideTouchRange = BooleanPreference(this, "wide_touch_range", false)
+        enableTouchSize = BooleanPreference(this, "enable_touch_size", false)
+        fatTouchThreshold = FloatPreference(this, "fat_touch_threshold", 0.027f)
+        extraFatTouchThreshold = FloatPreference(this, "extra_fat_touch_threshold", 0.035f)
+        gyroAirLowestBound = FloatPreference(this, "gyro_air_lowest", 0.8f)
+        gyroAirHighestBound = FloatPreference(this, "gyro_air_highest", 1.35f)
+        accelAirThreshold = FloatPreference(this, "accel_air_threshold", 2f)
+    }
 
     companion object {
         private const val settings_preference = "settings"

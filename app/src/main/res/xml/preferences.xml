@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory android:title="Common">
+
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="enable_vibrate"
+            android:title="@string/enable_vibrate" />
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="enable_nfc"
+            android:title="@string/enable_nfc" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="Touch Judge">
+
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="enable_touch_size"
+            android:title="@string/enable_touch_size" />
+        <EditTextPreference
+            android:defaultValue="0.027"
+            android:key="fat_touch_threshold"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/fat_touch_threshold" />
+        <EditTextPreference
+            android:defaultValue="0.035"
+            android:key="extra_fat_touch_threshold"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/extra_fat_touch_threshold" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="Sensor">
+
+        <EditTextPreference
+            android:defaultValue="0.8"
+            android:key="gyro_air_lowest"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/gyro_air_lowest" />
+        <EditTextPreference
+            android:defaultValue="1.35"
+            android:key="gyro_air_highest"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/gyro_air_highest" />
+        <EditTextPreference
+            android:defaultValue="2.0"
+            android:key="accel_air_threshold"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/accel_air_threshold" />
+    </PreferenceCategory>
+</PreferenceScreen>
