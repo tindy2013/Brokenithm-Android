@@ -168,6 +168,7 @@ class MainActivity : AppCompatActivity() {
     }
     private var adapter: NfcAdapter? = null
     private val mAimeKey = byteArrayOf(0x57, 0x43, 0x43, 0x46, 0x76, 0x32)
+    private val mBanaKey = byteArrayOf(0x60, -0x70, -0x30, 0x06, 0x32, -0x0b)
     private var mEnableNFC = true
     private var hasCard = false
     private var cardType = CardType.CARD_AIME
@@ -200,7 +201,8 @@ class MainActivity : AppCompatActivity() {
         thread {
             try {
                 mifare.connect()
-                if (mifare.authenticateBlock(2, keyA = mAimeKey, keyB = mAimeKey)) {
+                if (mifare.authenticateBlock(2, keyA = mAimeKey, keyB = mAimeKey) ||
+                    mifare.authenticateBlock(2, keyA = mBanaKey, keyB = mAimeKey)) {
                     Thread.sleep(100)
                     val block = mifare.readBlock(2)
                     block.copyInto(cardId, 0, 6, 16)
